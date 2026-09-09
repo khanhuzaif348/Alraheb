@@ -1236,3 +1236,199 @@ function initializeScrollEffects() {
     );
 
 }
+
+
+// Custom Cursor
+const cursor = document.getElementById('custom-cursor');
+const dot = cursor.querySelector('.cursor-dot');
+// const trail = cursor.querySelector('.cursor-trail'); // Simple trail
+
+let mouseX = 0, mouseY = 0;
+let cursorX = 0, cursorY = 0;
+
+document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+});
+
+function animateCursor() {
+    cursorX += (mouseX - cursorX) * 0.1;
+    cursorY += (mouseY - cursorY) * 0.1;
+    
+    dot.style.left = cursorX + 'px';
+    dot.style.top = cursorY + 'px';
+    // trail.style.left = cursorX + 'px';
+    // trail.style.top = cursorY + 'px';
+
+    requestAnimationFrame(animateCursor);
+}
+animateCursor();
+
+// Hover effect for interactive elements
+const interactiveElements = document.querySelectorAll('a, button, .nav-link, .whatsapp-button, .hero-products-button, .product-card');
+interactiveElements.forEach(el => {
+    el.addEventListener('mouseenter', () => dot.classList.add('hover'));
+    el.addEventListener('mouseleave', () => dot.classList.remove('hover'));
+});
+
+// Hide custom cursor on touch devices
+if ('ontouchstart' in window) {
+    document.getElementById('custom-cursor').style.display = 'none';
+    document.body.style.cursor = 'auto';
+}
+
+const particles = [];
+function createParticle(x, y) {
+    const el = document.createElement('div');
+    el.style.cssText = `
+        position: fixed;
+        top: ${y}px;
+        left: ${x}px;
+        width: 4px;
+        height: 4px;
+        background: radial-gradient(circle, #E9D9B5, #C5A059);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 9998;
+        opacity: 1;
+        transition: transform 0.8s ease, opacity 0.8s ease;
+    `;
+    document.body.appendChild(el);
+    
+    const angle = Math.random() * 2 * Math.PI;
+    const dist = 30 + Math.random() * 50;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+
+    requestAnimationFrame(() => {
+        el.style.transform = `translate(${dx}px, ${dy}px) scale(0)`;
+        el.style.opacity = '0';
+    });
+
+    setTimeout(() => el.remove(), 800);
+}
+
+// Inside mousemove
+if (Math.random() > 0.7) {
+    createParticle(e.clientX, e.clientY);
+}
+
+/* =========================================================
+   CUSTOM LUXURY CURSOR — Gold Dust Trail & Interactive
+   ========================================================= */
+
+(function initCustomCursor() {
+
+    // Check if it's a touch device
+    if ('ontouchstart' in window || window.innerWidth < 768) {
+        return;
+    }
+
+    const cursor = document.getElementById('custom-cursor');
+    const dot = cursor.querySelector('.cursor-dot');
+
+    let mouseX = 0,
+        mouseY = 0;
+    let cursorX = 0,
+        cursorY = 0;
+
+    // Track mouse position
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        // Spawn gold dust particles on movement
+        if (Math.random() > 0.6) {
+            createParticle(e.clientX, e.clientY);
+        }
+    });
+
+    // Smooth animation loop
+    function animateCursor() {
+        cursorX += (mouseX - cursorX) * 0.12;
+        cursorY += (mouseY - cursorY) * 0.12;
+
+        dot.style.left = cursorX + 'px';
+        dot.style.top = cursorY + 'px';
+
+        requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    // Hover effects — grow cursor on interactive elements
+    const interactives = document.querySelectorAll(
+        'a, button, .nav-link, .whatsapp-button, .hero-whatsapp, .cta-whatsapp, .contact-whatsapp, .hero-products-button, .product-card, .product-whatsapp, .slider-control, .faq-button, .floating-whatsapp, .mobile-link, .mobile-whatsapp'
+    );
+
+    interactives.forEach((el) => {
+        el.addEventListener('mouseenter', () => {
+            dot.classList.add('hover');
+        });
+        el.addEventListener('mouseleave', () => {
+            dot.classList.remove('hover');
+        });
+    });
+
+    // Click effect — quick pulse
+    document.addEventListener('mousedown', () => {
+        dot.classList.add('click');
+    });
+    document.addEventListener('mouseup', () => {
+        dot.classList.remove('click');
+    });
+
+    // =====================================================
+    // GOLD DUST PARTICLE TRAIL
+    // =====================================================
+
+    const particleContainer = document.createElement('div');
+    particleContainer.style.cssText = `
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 99998;
+            overflow: hidden;
+        `;
+    document.body.appendChild(particleContainer);
+
+    function createParticle(x, y) {
+        const particle = document.createElement('div');
+
+        const size = 3 + Math.random() * 6;
+        const angle = Math.random() * 2 * Math.PI;
+        const distance = 20 + Math.random() * 60;
+        const dx = Math.cos(angle) * distance;
+        const dy = Math.sin(angle) * distance;
+
+        particle.style.cssText = `
+                position: absolute;
+                top: ${y}px;
+                left: ${x}px;
+                width: ${size}px;
+                height: ${size}px;
+                background: radial-gradient(circle, #E9D9B5, #C5A059);
+                border-radius: 50%;
+                opacity: 1;
+                box-shadow: 0 0 6px #C5A059;
+                transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.6s ease;
+                will-change: transform, opacity;
+            `;
+
+        particleContainer.appendChild(particle);
+
+        // Animate particle outward and fade
+        requestAnimationFrame(() => {
+            particle.style.transform = `translate(${dx}px, ${dy}px) scale(0)`;
+            particle.style.opacity = '0';
+        });
+
+        // Clean up
+        setTimeout(() => {
+            if (particle.parentNode) particle.remove();
+        }, 700);
+    }
+
+})();

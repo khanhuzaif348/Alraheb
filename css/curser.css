@@ -1,0 +1,14 @@
+/* cursor.css – hide the default cursor everywhere */
+* {
+    cursor: none !important;
+}
+
+/* Optional: if you ever want to show the default cursor on touch devices, you can add a media query */
+@media (pointer: coarse) {
+    * {
+        cursor: auto !important;
+    }
+    #golden-cursor-container {
+        display: none !important;
+    }
+}
