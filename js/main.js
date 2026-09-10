@@ -358,22 +358,6 @@ function initializeHeroSlider() {
     let isPaused = false;
 
 
-    const slides =
-        Array.from(
-            container.querySelectorAll(
-                ".hero-slide"
-            )
-        );
-
-
-    const dots =
-        Array.from(
-            container.querySelectorAll(
-                ".slider-dot"
-            )
-        );
-
-
     /* =====================================================
        CLEAR TIMER
        ===================================================== */
