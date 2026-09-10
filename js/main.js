@@ -7,7 +7,7 @@
    START APPLICATION
    ========================================================= */
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
 
     initializeWhatsAppLinks();
 
@@ -15,9 +15,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderTrustItems();
 
-    await renderProducts();
+    /*
+       Render products immediately.
 
-    await initializeHeroSlider();
+       IMPORTANT:
+       We no longer wait for image-existence checks.
+       This makes the page much faster.
+    */
+    renderProducts();
+
+    initializeHeroSlider();
 
     renderBenefits();
 
@@ -27,8 +34,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     initializeScrollEffects();
 
-    document.getElementById("current-year").textContent =
-        new Date().getFullYear();
+    initializeCustomCursor();
+
+    const yearElement =
+        document.getElementById("current-year");
+
+    if (yearElement) {
+        yearElement.textContent =
+            new Date().getFullYear();
+    }
 
 });
 
@@ -111,127 +125,29 @@ function initializeMobileMenu() {
 
 
 /* =========================================================
-   IMAGE LOADER
-   =========================================================
-
-   This is what makes the website scalable.
-
-   You don't have to manually write:
-
-   image: "product-1-1.jpg"
-
-   The function automatically checks:
-
-   product-1-1.jpg
-   product-1-2.jpg
-   product-1-3.jpg
-   ...
-
+   IMAGE HELPER
    ========================================================= */
 
-function imageExists(path) {
+/*
+   We no longer search the server for images.
 
-    return new Promise(resolve => {
+   Images are already specified inside data.js.
 
-        const image =
-            new Image();
+   This function simply returns the images for a product.
+*/
 
-        image.onload = () => resolve(true);
+function getProductImages(product) {
 
-        image.onerror = () => resolve(false);
-
-        image.src = path;
-
-    });
-
-}
-
-
-async function getProductImages(productNumber) {
-
-    const images = [];
-
-    for (
-        let number = 1;
-        number <= SITE_CONFIG.maxImagesPerProduct;
-        number++
+    if (
+        !product ||
+        !Array.isArray(product.images)
     ) {
-
-        const path =
-            `assets/images/product-${productNumber}-${number}.jpg`;
-
-        const exists =
-            await imageExists(path);
-
-        if (exists) {
-
-            images.push(path);
-
-        } else {
-
-            /*
-             Stop when the next numbered image
-             does not exist.
-
-             Example:
-
-             1 exists
-             2 exists
-             3 exists
-             4 doesn't exist
-
-             Result:
-
-             1, 2, 3
-            */
-
-            break;
-        }
-
+        return [];
     }
 
-
-    /*
-       If no JPG images exist,
-       also check PNG.
-
-       This lets you use:
-
-       product-1-1.png
-       product-1-2.png
-
-    */
-
-    if (images.length === 0) {
-
-        for (
-            let number = 1;
-            number <= SITE_CONFIG.maxImagesPerProduct;
-            number++
-        ) {
-
-            const path =
-                `assets/images/product-${productNumber}-${number}.png`;
-
-            const exists =
-                await imageExists(path);
-
-            if (exists) {
-
-                images.push(path);
-
-            } else {
-
-                break;
-
-            }
-
-        }
-
-    }
-
-
-    return images;
+    return product.images.filter(
+        image => typeof image === "string" && image.trim() !== ""
+    );
 
 }
 
@@ -240,7 +156,7 @@ async function getProductImages(productNumber) {
    HERO SLIDER
    ========================================================= */
 
-async function initializeHeroSlider() {
+function initializeHeroSlider() {
 
     const container =
         document.getElementById("hero-product-slider");
@@ -248,37 +164,17 @@ async function initializeHeroSlider() {
     if (!container) return;
 
 
-    /*
-       Collect images from ALL products.
-
-       Example:
-
-       Product 1:
-       product-1-1
-       product-1-2
-       product-1-3
-
-       Product 2:
-       product-2-1
-       product-2-2
-
-       Product 3:
-       product-3-1
-       product-3-2
-
-       Hero will rotate through ALL of them.
-    */
+    /* =====================================================
+       COLLECT HERO IMAGES
+       ===================================================== */
 
     const heroImages = [];
 
 
-    for (const product of PRODUCTS) {
+    PRODUCTS.forEach(product => {
 
         const images =
-            await getProductImages(
-                product.productNumber
-            );
-
+            getProductImages(product);
 
         images.forEach(image => {
 
@@ -292,10 +188,12 @@ async function initializeHeroSlider() {
 
         });
 
-    }
+    });
 
 
-    /* Nothing found */
+    /* =====================================================
+       NOTHING FOUND
+       ===================================================== */
 
     if (heroImages.length === 0) {
 
@@ -321,7 +219,7 @@ async function initializeHeroSlider() {
 
     /* =====================================================
        CREATE SLIDES
-    ====================================================== */
+       ===================================================== */
 
     container.innerHTML = `
 
@@ -337,6 +235,8 @@ async function initializeHeroSlider() {
                         src="${item.image}"
                         alt="${item.name}"
                         loading="${index === 0 ? "eager" : "lazy"}"
+                        fetchpriority="${index === 0 ? "high" : "auto"}"
+                        decoding="async"
                     >
 
                     <div class="hero-product-label">
@@ -359,6 +259,7 @@ async function initializeHeroSlider() {
             >
                 <i class="fa-solid fa-chevron-left"></i>
             </button>
+
 
             <button
                 type="button"
@@ -404,6 +305,44 @@ async function initializeHeroSlider() {
         container.querySelectorAll(".slider-dot");
 
 
+    /* =====================================================
+       PRELOAD HERO IMAGE
+       ===================================================== */
+
+    function preloadImage(index) {
+
+        if (!heroImages[index]) return;
+
+        const image =
+            new Image();
+
+        image.src =
+            heroImages[index].image;
+
+    }
+
+
+    /*
+       Load the second image in the background.
+
+       This does NOT block the initial page load.
+    */
+
+    if (heroImages.length > 1) {
+
+        window.setTimeout(() => {
+
+            preloadImage(1);
+
+        }, 800);
+
+    }
+
+
+    /* =====================================================
+       SHOW SLIDE
+       ===================================================== */
+
     function showSlide(index) {
 
         currentIndex =
@@ -430,22 +369,49 @@ async function initializeHeroSlider() {
 
         });
 
+
+        /*
+           Preload the next image after the current
+           image is displayed.
+
+           This makes the slider smoother without
+           downloading everything at once.
+        */
+
+        const nextIndex =
+            (currentIndex + 1) %
+            heroImages.length;
+
+        preloadImage(nextIndex);
+
     }
 
 
+    /* =====================================================
+       NEXT / PREVIOUS
+       ===================================================== */
+
     function nextSlide() {
 
-        showSlide(currentIndex + 1);
+        showSlide(
+            currentIndex + 1
+        );
 
     }
 
 
     function previousSlide() {
 
-        showSlide(currentIndex - 1);
+        showSlide(
+            currentIndex - 1
+        );
 
     }
 
+
+    /* =====================================================
+       AUTO SLIDE
+       ===================================================== */
 
     function startAutoSlide() {
 
@@ -460,50 +426,69 @@ async function initializeHeroSlider() {
     }
 
 
-    document
-        .getElementById("hero-next")
-        .addEventListener("click", () => {
+    /* =====================================================
+       CONTROLS
+       ===================================================== */
+
+    const nextButton =
+        document.getElementById("hero-next");
+
+    const previousButton =
+        document.getElementById("hero-prev");
+
+
+    nextButton?.addEventListener(
+        "click",
+        () => {
 
             nextSlide();
 
             startAutoSlide();
 
-        });
+        }
+    );
 
 
-    document
-        .getElementById("hero-prev")
-        .addEventListener("click", () => {
+    previousButton?.addEventListener(
+        "click",
+        () => {
 
             previousSlide();
 
             startAutoSlide();
 
-        });
+        }
+    );
 
+
+    /* =====================================================
+       DOTS
+       ===================================================== */
 
     dots.forEach(dot => {
 
-        dot.addEventListener("click", () => {
+        dot.addEventListener(
+            "click",
+            () => {
 
-            const index =
-                Number(
-                    dot.dataset.heroDot
-                );
+                const index =
+                    Number(
+                        dot.dataset.heroDot
+                    );
 
-            showSlide(index);
+                showSlide(index);
 
-            startAutoSlide();
+                startAutoSlide();
 
-        });
+            }
+        );
 
     });
 
 
-    /*
-       Pause when user places mouse
-       over the hero image.
-    */
+    /* =====================================================
+       PAUSE ON HOVER
+       ===================================================== */
 
     container.addEventListener(
         "mouseenter",
@@ -516,6 +501,10 @@ async function initializeHeroSlider() {
         startAutoSlide
     );
 
+
+    /* =====================================================
+       START
+       ===================================================== */
 
     startAutoSlide();
 
@@ -579,7 +568,7 @@ function renderTrustItems() {
    PRODUCTS
    ========================================================= */
 
-async function renderProducts() {
+function renderProducts() {
 
     const container =
         document.getElementById("products-grid");
@@ -587,30 +576,21 @@ async function renderProducts() {
     if (!container) return;
 
 
-    container.innerHTML =
-        `<div class="col-span-full text-center py-10 text-[#756D68]">
-            Loading products...
-        </div>`;
+    container.innerHTML = "";
 
 
     const productHTML = [];
 
 
-    /*
-       Load every product's images.
-    */
-
-    for (const product of PRODUCTS) {
+    PRODUCTS.forEach(product => {
 
         const images =
-            await getProductImages(
-                product.productNumber
-            );
+            getProductImages(product);
 
 
         /*
-           If image doesn't exist,
-           use placeholder.
+           If the product has no images,
+           show the placeholder.
         */
 
         const finalImages =
@@ -622,6 +602,10 @@ async function renderProducts() {
         const multipleImages =
             finalImages.length > 1;
 
+
+        /* =================================================
+           PRODUCT SLIDES
+           ================================================= */
 
         const slides =
             finalImages
@@ -637,6 +621,7 @@ async function renderProducts() {
                             alt="${product.name}"
                             class="product-image"
                             loading="lazy"
+                            decoding="async"
                         >
 
                     </div>
@@ -644,6 +629,10 @@ async function renderProducts() {
                 `)
                 .join("");
 
+
+        /* =================================================
+           ARROWS
+           ================================================= */
 
         const arrows =
             multipleImages
@@ -655,7 +644,9 @@ async function renderProducts() {
                         data-product-prev
                         aria-label="Previous image"
                     >
+
                         <i class="fa-solid fa-chevron-left"></i>
+
                     </button>
 
 
@@ -665,12 +656,18 @@ async function renderProducts() {
                         data-product-next
                         aria-label="Next image"
                     >
+
                         <i class="fa-solid fa-chevron-right"></i>
+
                     </button>
 
                 `
                 : "";
 
+
+        /* =================================================
+           DOTS
+           ================================================= */
 
         const dots =
             multipleImages
@@ -696,6 +693,10 @@ async function renderProducts() {
                 `
                 : "";
 
+
+        /* =================================================
+           PRODUCT CARD
+           ================================================= */
 
         productHTML.push(`
 
@@ -816,7 +817,7 @@ async function renderProducts() {
 
         `);
 
-    }
+    });
 
 
     container.innerHTML =
@@ -879,6 +880,10 @@ function initializeProductCarousels() {
         let interval;
 
 
+        /* =================================================
+           SHOW SLIDE
+           ================================================= */
+
         function showSlide(index) {
 
             currentIndex =
@@ -908,6 +913,10 @@ function initializeProductCarousels() {
         }
 
 
+        /* =================================================
+           NEXT / PREVIOUS
+           ================================================= */
+
         function nextSlide() {
 
             showSlide(
@@ -926,6 +935,10 @@ function initializeProductCarousels() {
         }
 
 
+        /* =================================================
+           AUTO PLAY
+           ================================================= */
+
         function start() {
 
             clearInterval(interval);
@@ -938,6 +951,10 @@ function initializeProductCarousels() {
 
         }
 
+
+        /* =================================================
+           BUTTONS
+           ================================================= */
 
         next?.addEventListener(
             "click",
@@ -963,6 +980,10 @@ function initializeProductCarousels() {
         );
 
 
+        /* =================================================
+           DOTS
+           ================================================= */
+
         dots.forEach(dot => {
 
             dot.addEventListener(
@@ -983,16 +1004,16 @@ function initializeProductCarousels() {
         });
 
 
-        /*
-           Automatically change product images.
-        */
+        /* =================================================
+           START
+           ================================================= */
 
         start();
 
 
-        /*
-           Pause while user is looking at it.
-        */
+        /* =================================================
+           PAUSE ON HOVER
+           ================================================= */
 
         card.addEventListener(
             "mouseenter",
@@ -1238,199 +1259,166 @@ function initializeScrollEffects() {
 }
 
 
-// Custom Cursor
-const cursor = document.getElementById('custom-cursor');
-const dot = cursor.querySelector('.cursor-dot');
-// const trail = cursor.querySelector('.cursor-trail'); // Simple trail
-
-let mouseX = 0, mouseY = 0;
-let cursorX = 0, cursorY = 0;
-
-document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-});
-
-function animateCursor() {
-    cursorX += (mouseX - cursorX) * 0.1;
-    cursorY += (mouseY - cursorY) * 0.1;
-    
-    dot.style.left = cursorX + 'px';
-    dot.style.top = cursorY + 'px';
-    // trail.style.left = cursorX + 'px';
-    // trail.style.top = cursorY + 'px';
-
-    requestAnimationFrame(animateCursor);
-}
-animateCursor();
-
-// Hover effect for interactive elements
-const interactiveElements = document.querySelectorAll('a, button, .nav-link, .whatsapp-button, .hero-products-button, .product-card');
-interactiveElements.forEach(el => {
-    el.addEventListener('mouseenter', () => dot.classList.add('hover'));
-    el.addEventListener('mouseleave', () => dot.classList.remove('hover'));
-});
-
-// Hide custom cursor on touch devices
-if ('ontouchstart' in window) {
-    document.getElementById('custom-cursor').style.display = 'none';
-    document.body.style.cursor = 'auto';
-}
-
-const particles = [];
-function createParticle(x, y) {
-    const el = document.createElement('div');
-    el.style.cssText = `
-        position: fixed;
-        top: ${y}px;
-        left: ${x}px;
-        width: 4px;
-        height: 4px;
-        background: radial-gradient(circle, #E9D9B5, #C5A059);
-        border-radius: 50%;
-        pointer-events: none;
-        z-index: 9998;
-        opacity: 1;
-        transition: transform 0.8s ease, opacity 0.8s ease;
-    `;
-    document.body.appendChild(el);
-    
-    const angle = Math.random() * 2 * Math.PI;
-    const dist = 30 + Math.random() * 50;
-    const dx = Math.cos(angle) * dist;
-    const dy = Math.sin(angle) * dist;
-
-    requestAnimationFrame(() => {
-        el.style.transform = `translate(${dx}px, ${dy}px) scale(0)`;
-        el.style.opacity = '0';
-    });
-
-    setTimeout(() => el.remove(), 800);
-}
-
-// Inside mousemove
-if (Math.random() > 0.7) {
-    createParticle(e.clientX, e.clientY);
-}
-
 /* =========================================================
-   CUSTOM LUXURY CURSOR — Gold Dust Trail & Interactive
+   CUSTOM LUXURY CURSOR
    ========================================================= */
 
-(function initCustomCursor() {
+/*
+   IMPORTANT:
 
-    // Check if it's a touch device
-    if ('ontouchstart' in window || window.innerWidth < 768) {
+   Your old main.js contained TWO cursor systems.
+
+   It also tried to access #custom-cursor even when
+   that element did not exist.
+
+   That could create JavaScript errors.
+
+   This version safely initializes the cursor only
+   when the required HTML exists.
+*/
+
+function initializeCustomCursor() {
+
+    /*
+       Don't run on touch devices.
+    */
+
+    if (
+        "ontouchstart" in window ||
+        window.innerWidth < 768
+    ) {
         return;
     }
 
-    const cursor = document.getElementById('custom-cursor');
-    const dot = cursor.querySelector('.cursor-dot');
 
-    let mouseX = 0,
-        mouseY = 0;
-    let cursorX = 0,
-        cursorY = 0;
+    const cursor =
+        document.getElementById("custom-cursor");
 
-    // Track mouse position
-    document.addEventListener('mousemove', (e) => {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-
-        // Spawn gold dust particles on movement
-        if (Math.random() > 0.6) {
-            createParticle(e.clientX, e.clientY);
-        }
-    });
-
-    // Smooth animation loop
-    function animateCursor() {
-        cursorX += (mouseX - cursorX) * 0.12;
-        cursorY += (mouseY - cursorY) * 0.12;
-
-        dot.style.left = cursorX + 'px';
-        dot.style.top = cursorY + 'px';
-
-        requestAnimationFrame(animateCursor);
+    if (!cursor) {
+        return;
     }
-    animateCursor();
 
-    // Hover effects — grow cursor on interactive elements
-    const interactives = document.querySelectorAll(
-        'a, button, .nav-link, .whatsapp-button, .hero-whatsapp, .cta-whatsapp, .contact-whatsapp, .hero-products-button, .product-card, .product-whatsapp, .slider-control, .faq-button, .floating-whatsapp, .mobile-link, .mobile-whatsapp'
+
+    const dot =
+        cursor.querySelector(".cursor-dot");
+
+    if (!dot) {
+        return;
+    }
+
+
+    let mouseX = 0;
+
+    let mouseY = 0;
+
+    let cursorX = 0;
+
+    let cursorY = 0;
+
+
+    /* =====================================================
+       MOUSE MOVEMENT
+       ===================================================== */
+
+    document.addEventListener(
+        "mousemove",
+        (event) => {
+
+            mouseX =
+                event.clientX;
+
+            mouseY =
+                event.clientY;
+
+        }
     );
 
-    interactives.forEach((el) => {
-        el.addEventListener('mouseenter', () => {
-            dot.classList.add('hover');
-        });
-        el.addEventListener('mouseleave', () => {
-            dot.classList.remove('hover');
-        });
-    });
 
-    // Click effect — quick pulse
-    document.addEventListener('mousedown', () => {
-        dot.classList.add('click');
-    });
-    document.addEventListener('mouseup', () => {
-        dot.classList.remove('click');
-    });
+    /* =====================================================
+       CURSOR ANIMATION
+       ===================================================== */
 
-    // =====================================================
-    // GOLD DUST PARTICLE TRAIL
-    // =====================================================
+    function animateCursor() {
 
-    const particleContainer = document.createElement('div');
-    particleContainer.style.cssText = `
-            pointer-events: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 99998;
-            overflow: hidden;
-        `;
-    document.body.appendChild(particleContainer);
+        cursorX +=
+            (mouseX - cursorX) * 0.12;
 
-    function createParticle(x, y) {
-        const particle = document.createElement('div');
+        cursorY +=
+            (mouseY - cursorY) * 0.12;
 
-        const size = 3 + Math.random() * 6;
-        const angle = Math.random() * 2 * Math.PI;
-        const distance = 20 + Math.random() * 60;
-        const dx = Math.cos(angle) * distance;
-        const dy = Math.sin(angle) * distance;
 
-        particle.style.cssText = `
-                position: absolute;
-                top: ${y}px;
-                left: ${x}px;
-                width: ${size}px;
-                height: ${size}px;
-                background: radial-gradient(circle, #E9D9B5, #C5A059);
-                border-radius: 50%;
-                opacity: 1;
-                box-shadow: 0 0 6px #C5A059;
-                transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.6s ease;
-                will-change: transform, opacity;
-            `;
+        dot.style.left =
+            cursorX + "px";
 
-        particleContainer.appendChild(particle);
+        dot.style.top =
+            cursorY + "px";
 
-        // Animate particle outward and fade
-        requestAnimationFrame(() => {
-            particle.style.transform = `translate(${dx}px, ${dy}px) scale(0)`;
-            particle.style.opacity = '0';
-        });
 
-        // Clean up
-        setTimeout(() => {
-            if (particle.parentNode) particle.remove();
-        }, 700);
+        requestAnimationFrame(
+            animateCursor
+        );
+
     }
 
-})();
+
+    animateCursor();
 
 
+    /* =====================================================
+       HOVER EFFECT
+       ===================================================== */
+
+    const interactiveElements =
+        document.querySelectorAll(
+            "a, button, .nav-link, .whatsapp-button, .hero-whatsapp, .cta-whatsapp, .contact-whatsapp, .hero-products-button, .product-card, .product-whatsapp, .slider-control, .faq-button, .floating-whatsapp, .mobile-link, .mobile-whatsapp"
+        );
+
+
+    interactiveElements.forEach(element => {
+
+        element.addEventListener(
+            "mouseenter",
+            () => {
+
+                dot.classList.add("hover");
+
+            }
+        );
+
+
+        element.addEventListener(
+            "mouseleave",
+            () => {
+
+                dot.classList.remove("hover");
+
+            }
+        );
+
+    });
+
+
+    /* =====================================================
+       CLICK EFFECT
+       ===================================================== */
+
+    document.addEventListener(
+        "mousedown",
+        () => {
+
+            dot.classList.add("click");
+
+        }
+    );
+
+
+    document.addEventListener(
+        "mouseup",
+        () => {
+
+            dot.classList.remove("click");
+
+        }
+    );
+
+}
