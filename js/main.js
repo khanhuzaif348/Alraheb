@@ -1093,168 +1093,69 @@ function renderProducts() {
 function initializeProductCarousels() {
 
     const cards =
-        document.querySelectorAll(
-            "[data-product-card]"
-        );
-
+        document.querySelectorAll("[data-product-card]");
 
     cards.forEach(card => {
 
         const carousel =
-            card.querySelector(
-                "[data-product-carousel]"
-            );
+            card.querySelector("[data-product-carousel]");
 
         if (!carousel) return;
 
-
         const slides =
-            Array.from(
-                carousel.querySelectorAll(
-                    ".product-carousel-slide"
-                )
-            );
-
+            carousel.querySelectorAll(".product-carousel-slide");
 
         const dots =
-            Array.from(
-                card.querySelectorAll(
-                    ".product-dot"
-                )
-            );
-
+            card.querySelectorAll(".product-dot");
 
         const prev =
-            card.querySelector(
-                "[data-product-prev]"
-            );
-
+            card.querySelector("[data-product-prev]");
 
         const next =
-            card.querySelector(
-                "[data-product-next]"
-            );
-
+            card.querySelector("[data-product-next]");
 
         if (slides.length <= 1) return;
 
-
         let currentIndex = 0;
-
-        let timer = null;
-
-        let paused = false;
+        let imageTimer = null;
 
 
-        /* =================================================
-           CLEAR TIMER
-           ================================================= */
+        /* =====================================================
+           STOP EVERYTHING
+           ===================================================== */
 
-        function clearTimer() {
+        function stopEverything() {
 
-            if (timer !== null) {
+            clearTimeout(imageTimer);
 
-                clearTimeout(timer);
-
-                timer = null;
-
-            }
-
-        }
-
-
-        /* =================================================
-           GET CURRENT VIDEO
-           ================================================= */
-
-        function getCurrentVideo() {
-
-            const slide =
-                slides[currentIndex];
-
-            if (!slide) return null;
-
-            return slide.querySelector(
-                "video"
-            );
-
-        }
-
-
-        /* =================================================
-           STOP ALL VIDEOS
-           ================================================= */
-
-        function stopAllVideos() {
-
-            slides.forEach((slide, index) => {
+            slides.forEach(slide => {
 
                 const video =
-                    slide.querySelector(
-                        "video"
-                    );
+                    slide.querySelector("video");
 
-                if (!video) return;
-
-
-                video.pause();
-
-
-                /*
-                   Reset videos that aren't
-                   currently selected.
-                */
-
-                if (index !== currentIndex) {
-
-                    try {
-
-                        video.currentTime = 0;
-
-                    } catch (error) {}
-
+                if (video) {
+                    video.pause();
                 }
-
-
-                video.onended = null;
 
             });
 
         }
 
 
-        /* =================================================
+        /* =====================================================
            SHOW SLIDE
-           ================================================= */
+           ===================================================== */
 
         function showSlide(index) {
 
-            /*
-               Remove any old image timer.
-            */
+            clearTimeout(imageTimer);
 
-            clearTimer();
-
-
-            /*
-               Calculate new index.
-            */
+            stopEverything();
 
             currentIndex =
                 (index + slides.length) %
                 slides.length;
 
-
-            /*
-               Stop videos.
-            */
-
-            stopAllVideos();
-
-
-            /* =================================================
-               ACTIVATE SLIDE
-               ================================================= */
 
             slides.forEach((slide, i) => {
 
@@ -1266,10 +1167,6 @@ function initializeProductCarousels() {
             });
 
 
-            /* =================================================
-               ACTIVATE DOT
-               ================================================= */
-
             dots.forEach((dot, i) => {
 
                 dot.classList.toggle(
@@ -1280,100 +1177,48 @@ function initializeProductCarousels() {
             });
 
 
-            /* =================================================
-               CURRENT VIDEO?
-               ================================================= */
+            const currentSlide =
+                slides[currentIndex];
 
             const video =
-                getCurrentVideo();
+                currentSlide.querySelector("video");
 
 
             /* =================================================
-               VIDEO SLIDE
+               VIDEO
                ================================================= */
 
             if (video) {
 
-                /*
-                   VERY IMPORTANT:
-
-                   There is NO setTimeout()
-                   here.
-
-                   Video controls when
-                   the slide changes.
-                */
-
-
-                video.muted = true;
-
-                video.playsInline = true;
-
+                video.currentTime = 0;
 
                 /*
-                   Start from beginning.
+                   Make sure the browser has loaded
+                   enough data to start.
                 */
 
-                try {
+                if (video.readyState === 0) {
+                    video.load();
+                }
 
-                    video.currentTime = 0;
-
-                } catch (error) {}
-
-
-                /*
-                   When video finishes,
-                   go to next slide.
-                */
-
-                video.onended = () => {
-
-                    if (!paused) {
-
-                        showSlide(
-                            currentIndex + 1
-                        );
-
-                    }
-
-                };
-
-
-                /*
-                   Play video.
-                */
 
                 const playVideo = () => {
 
-                    if (paused) return;
-
-                    video
-                        .play()
-                        .catch(() => {});
+                    video.play().catch(() => {});
 
                 };
 
 
-                /*
-                   Video already ready.
-                */
-
-                if (video.readyState >= 3) {
+                if (video.readyState >= 2) {
 
                     playVideo();
 
                 } else {
 
-                    /*
-                       Wait until browser can play.
-                    */
-
                     video.addEventListener(
-                        "canplay",
+                        "loadeddata",
                         playVideo,
-                        {
-                            once: true
-                        }
+                        { once: true }
                     );
 
                 }
@@ -1382,198 +1227,134 @@ function initializeProductCarousels() {
                 /*
                    IMPORTANT:
 
-                   RETURN HERE.
+                   Do NOT use the 2.5 second timer
+                   for videos.
 
-                   This prevents the image
-                   timer from being created.
+                   Wait until the COMPLETE video ends.
                 */
 
-                return;
+                video.onended = () => {
 
+                    showSlide(
+                        currentIndex + 1
+                    );
+
+                };
+
+
+                return;
             }
 
 
             /* =================================================
-               NORMAL IMAGE
+               IMAGE
                ================================================= */
 
-            if (!paused) {
+            imageTimer =
+                setTimeout(() => {
 
-                timer =
-                    setTimeout(
-                        () => {
-
-                            showSlide(
-                                currentIndex + 1
-                            );
-
-                        },
-                        SITE_CONFIG.productSlideDuration
+                    showSlide(
+                        currentIndex + 1
                     );
 
-            }
+                }, SITE_CONFIG.productSlideDuration);
 
         }
 
 
-        /* =================================================
+        /* =====================================================
            NEXT BUTTON
-           ================================================= */
+           ===================================================== */
 
-        next?.addEventListener(
-            "click",
-            () => {
+        next?.addEventListener("click", () => {
 
-                paused = false;
-
-                showSlide(
-                    currentIndex + 1
-                );
-
-            }
-        );
-
-
-        /* =================================================
-           PREVIOUS BUTTON
-           ================================================= */
-
-        prev?.addEventListener(
-            "click",
-            () => {
-
-                paused = false;
-
-                showSlide(
-                    currentIndex - 1
-                );
-
-            }
-        );
-
-
-        /* =================================================
-           DOTS
-           ================================================= */
-
-        dots.forEach(dot => {
-
-            dot.addEventListener(
-                "click",
-                () => {
-
-                    paused = false;
-
-
-                    const index =
-                        Number(
-                            dot.dataset.productDot
-                        );
-
-
-                    showSlide(index);
-
-                }
+            showSlide(
+                currentIndex + 1
             );
 
         });
 
 
-        /* =================================================
-           MOUSE ENTER
-           ================================================= */
+        /* =====================================================
+           PREVIOUS BUTTON
+           ===================================================== */
 
-        card.addEventListener(
-            "mouseenter",
-            () => {
+        prev?.addEventListener("click", () => {
 
-                paused = true;
+            showSlide(
+                currentIndex - 1
+            );
 
-                clearTimer();
-
-
-                const video =
-                    getCurrentVideo();
+        });
 
 
-                if (video) {
+        /* =====================================================
+           DOTS
+           ===================================================== */
 
-                    video.pause();
+        dots.forEach(dot => {
 
-                }
+            dot.addEventListener("click", () => {
+
+                showSlide(
+                    Number(dot.dataset.productDot)
+                );
+
+            });
+
+        });
+
+
+        /* =====================================================
+           PAUSE WHEN MOUSE IS OVER CARD
+           ===================================================== */
+
+        card.addEventListener("mouseenter", () => {
+
+            clearTimeout(imageTimer);
+
+            const video =
+                slides[currentIndex].querySelector("video");
+
+            if (video) {
+                video.pause();
+            }
+
+        });
+
+
+        /* =====================================================
+           RESUME WHEN MOUSE LEAVES
+           ===================================================== */
+
+        card.addEventListener("mouseleave", () => {
+
+            const video =
+                slides[currentIndex].querySelector("video");
+
+            if (video) {
+
+                video.play().catch(() => {});
+
+            } else {
+
+                imageTimer =
+                    setTimeout(() => {
+
+                        showSlide(
+                            currentIndex + 1
+                        );
+
+                    }, SITE_CONFIG.productSlideDuration);
 
             }
-        );
+
+        });
 
 
-        /* =================================================
-           MOUSE LEAVE
-           ================================================= */
-
-        card.addEventListener(
-            "mouseleave",
-            () => {
-
-                paused = false;
-
-
-                const video =
-                    getCurrentVideo();
-
-
-                /* =============================================
-                   VIDEO
-                   ============================================= */
-
-                if (video) {
-
-                    video.play().catch(() => {});
-
-
-                    video.onended = () => {
-
-                        if (!paused) {
-
-                            showSlide(
-                                currentIndex + 1
-                            );
-
-                        }
-
-                    };
-
-
-                    return;
-
-                }
-
-
-                /* =============================================
-                   IMAGE
-                   ============================================= */
-
-                clearTimer();
-
-
-                timer =
-                    setTimeout(
-                        () => {
-
-                            showSlide(
-                                currentIndex + 1
-                            );
-
-                        },
-                        SITE_CONFIG.productSlideDuration
-                    );
-
-            }
-        );
-
-
-        /* =================================================
+        /* =====================================================
            START
-           ================================================= */
+           ===================================================== */
 
         showSlide(0);
 

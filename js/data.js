@@ -88,7 +88,7 @@ const PRODUCTS = [
             "assets/images/product-1-2.jpg",
             "assets/images/product-1-3.jpg",
             "assets/images/product-1-4.jpg",
-            "assets/images/product-2-video.mp4"
+            "assets/images/product-2-video-web.mp4"
         ],
 
         badge: "High Volume Available",
@@ -122,7 +122,7 @@ const PRODUCTS = [
             "assets/images/product-2-3.jpg",
             "assets/images/product-2-4.jpg",
             "assets/images/product-2-5.jpg",
-            "assets/images/product-2-video.mp4"
+            "assets/images/product-2-video-web.mp4"
         ],
 
         badge: "Custom Specs Available",
