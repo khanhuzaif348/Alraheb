@@ -15,13 +15,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderTrustItems();
 
-    /*
-       Render products immediately.
-
-       IMPORTANT:
-       We no longer wait for image-existence checks.
-       This makes the page much faster.
-    */
     renderProducts();
 
     initializeHeroSlider();
@@ -125,16 +118,17 @@ function initializeMobileMenu() {
 
 
 /* =========================================================
-   IMAGE HELPER
+   PRODUCT MEDIA HELPER
+   Supports:
+   JPG
+   JPEG
+   PNG
+   WEBP
+   GIF
+   MP4
+   WEBM
+   MOV
    ========================================================= */
-
-/*
-   We no longer search the server for images.
-
-   Images are already specified inside data.js.
-
-   This function simply returns the images for a product.
-*/
 
 function getProductImages(product) {
 
@@ -146,43 +140,62 @@ function getProductImages(product) {
     }
 
     return product.images.filter(
-        image => typeof image === "string" && image.trim() !== ""
+        image =>
+            typeof image === "string" &&
+            image.trim() !== ""
     );
 
 }
 
 
 /* =========================================================
+   CHECK VIDEO
+   ========================================================= */
+
+function isVideoFile(file) {
+
+    return /\.(mp4|webm|mov)$/i.test(file);
+
+}
+
+
+/* =========================================================
    HERO SLIDER
+   Supports images + videos
    ========================================================= */
 
 function initializeHeroSlider() {
 
     const container =
-        document.getElementById("hero-product-slider");
+        document.getElementById(
+            "hero-product-slider"
+        );
 
     if (!container) return;
 
 
     /* =====================================================
-       COLLECT HERO IMAGES
+       COLLECT ALL PRODUCT MEDIA
        ===================================================== */
 
-    const heroImages = [];
+    const heroMedia = [];
 
 
     PRODUCTS.forEach(product => {
 
-        const images =
+        const media =
             getProductImages(product);
 
-        images.forEach(image => {
 
-            heroImages.push({
+        media.forEach(file => {
 
-                image: image,
+            heroMedia.push({
 
-                name: product.name
+                file: file,
+
+                name: product.name,
+
+                isVideo: isVideoFile(file)
 
             });
 
@@ -195,7 +208,7 @@ function initializeHeroSlider() {
        NOTHING FOUND
        ===================================================== */
 
-    if (heroImages.length === 0) {
+    if (heroMedia.length === 0) {
 
         container.innerHTML = `
 
@@ -218,34 +231,75 @@ function initializeHeroSlider() {
 
 
     /* =====================================================
-       CREATE SLIDES
+       CREATE HERO SLIDES
        ===================================================== */
 
     container.innerHTML = `
 
-        ${heroImages
-            .map((item, index) => `
+        ${heroMedia
+            .map((item, index) => {
 
-                <div
-                    class="hero-slide ${index === 0 ? "active" : ""}"
-                    data-slide="${index}"
-                >
+                /* =========================================
+                   VIDEO
+                   ========================================= */
 
-                    <img
-                        src="${item.image}"
-                        alt="${item.name}"
-                        loading="${index === 0 ? "eager" : "lazy"}"
-                        fetchpriority="${index === 0 ? "high" : "auto"}"
-                        decoding="async"
+                if (item.isVideo) {
+
+                    return `
+
+                        <div
+                            class="hero-slide ${index === 0 ? "active" : ""}"
+                            data-slide="${index}"
+                        >
+
+                            <video
+                                class="hero-product-video"
+                                src="${item.file}"
+                                muted
+                                playsinline
+                                preload="metadata"
+                            ></video>
+
+
+                            <div class="hero-product-label">
+                                ${item.name}
+                            </div>
+
+                        </div>
+
+                    `;
+
+                }
+
+
+                /* =========================================
+                   IMAGE
+                   ========================================= */
+
+                return `
+
+                    <div
+                        class="hero-slide ${index === 0 ? "active" : ""}"
+                        data-slide="${index}"
                     >
 
-                    <div class="hero-product-label">
-                        ${item.name}
+                        <img
+                            src="${item.file}"
+                            alt="${item.name}"
+                            loading="${index === 0 ? "eager" : "lazy"}"
+                            fetchpriority="${index === 0 ? "high" : "auto"}"
+                            decoding="async"
+                        >
+
+                        <div class="hero-product-label">
+                            ${item.name}
+                        </div>
+
                     </div>
 
-                </div>
+                `;
 
-            `)
+            })
             .join("")}
 
 
@@ -275,14 +329,14 @@ function initializeHeroSlider() {
 
         <div class="hero-slider-dots">
 
-            ${heroImages
-                .map((_, index) => `
+            ${heroMedia
+                .map((item, index) => `
 
                     <button
                         type="button"
                         class="slider-dot ${index === 0 ? "active" : ""}"
                         data-hero-dot="${index}"
-                        aria-label="Go to product ${index + 1}"
+                        aria-label="${item.isVideo ? "Video" : "Image"} ${index + 1}"
                     ></button>
 
                 `)
@@ -293,48 +347,68 @@ function initializeHeroSlider() {
     `;
 
 
+    /* =====================================================
+       VARIABLES
+       ===================================================== */
+
     let currentIndex = 0;
 
-    let autoSlide;
+    let timer = null;
+
+    let isPaused = false;
 
 
     const slides =
-        container.querySelectorAll(".hero-slide");
+        Array.from(
+            container.querySelectorAll(
+                ".hero-slide"
+            )
+        );
+
 
     const dots =
-        container.querySelectorAll(".slider-dot");
+        Array.from(
+            container.querySelectorAll(
+                ".slider-dot"
+            )
+        );
 
 
     /* =====================================================
-       PRELOAD HERO IMAGE
+       CLEAR TIMER
        ===================================================== */
 
-    function preloadImage(index) {
+    function clearSlideTimer() {
 
-        if (!heroImages[index]) return;
+        if (timer !== null) {
 
-        const image =
-            new Image();
+            clearTimeout(timer);
 
-        image.src =
-            heroImages[index].image;
+            timer = null;
+
+        }
 
     }
 
 
-    /*
-       Load the second image in the background.
+    /* =====================================================
+       STOP ALL VIDEOS
+       ===================================================== */
 
-       This does NOT block the initial page load.
-    */
+    function stopAllVideos() {
 
-    if (heroImages.length > 1) {
+        slides.forEach(slide => {
 
-        window.setTimeout(() => {
+            const video =
+                slide.querySelector("video");
 
-            preloadImage(1);
+            if (!video) return;
 
-        }, 800);
+            video.pause();
+
+            video.onended = null;
+
+        });
 
     }
 
@@ -345,10 +419,19 @@ function initializeHeroSlider() {
 
     function showSlide(index) {
 
+        clearSlideTimer();
+
+        stopAllVideos();
+
+
         currentIndex =
             (index + slides.length) %
             slides.length;
 
+
+        /* =================================================
+           ACTIVATE SLIDE
+           ================================================= */
 
         slides.forEach((slide, i) => {
 
@@ -360,6 +443,10 @@ function initializeHeroSlider() {
         });
 
 
+        /* =================================================
+           ACTIVATE DOT
+           ================================================= */
+
         dots.forEach((dot, i) => {
 
             dot.classList.toggle(
@@ -370,92 +457,159 @@ function initializeHeroSlider() {
         });
 
 
-        /*
-           Preload the next image after the current
-           image is displayed.
+        const currentSlide =
+            slides[currentIndex];
 
-           This makes the slider smoother without
-           downloading everything at once.
-        */
 
-        const nextIndex =
-            (currentIndex + 1) %
-            heroImages.length;
+        const video =
+            currentSlide.querySelector("video");
 
-        preloadImage(nextIndex);
+
+        /* =================================================
+           VIDEO SLIDE
+           ================================================= */
+
+        if (video) {
+
+            /*
+               Video controls its own duration.
+
+               THERE IS NO 2.5 SECOND TIMER HERE.
+            */
+
+            video.muted = true;
+
+            video.playsInline = true;
+
+
+            /*
+               Start from beginning.
+            */
+
+            try {
+                video.currentTime = 0;
+            } catch (error) {}
+
+
+            /*
+               When video finishes,
+               move to next slide.
+            */
+
+            video.onended = () => {
+
+                if (!isPaused) {
+
+                    showSlide(
+                        currentIndex + 1
+                    );
+
+                }
+
+            };
+
+
+            /*
+               Play video.
+            */
+
+            const playVideo = () => {
+
+                if (isPaused) return;
+
+                video.play().catch(() => {});
+
+            };
+
+
+            if (video.readyState >= 3) {
+
+                playVideo();
+
+            } else {
+
+                video.addEventListener(
+                    "canplay",
+                    playVideo,
+                    {
+                        once: true
+                    }
+                );
+
+            }
+
+
+            return;
+
+        }
+
+
+        /* =================================================
+           NORMAL IMAGE
+           ================================================= */
+
+        if (!isPaused) {
+
+            timer =
+                setTimeout(
+                    () => {
+
+                        showSlide(
+                            currentIndex + 1
+                        );
+
+                    },
+                    SITE_CONFIG.heroSlideDuration
+                );
+
+        }
 
     }
 
 
     /* =====================================================
-       NEXT / PREVIOUS
-       ===================================================== */
-
-    function nextSlide() {
-
-        showSlide(
-            currentIndex + 1
-        );
-
-    }
-
-
-    function previousSlide() {
-
-        showSlide(
-            currentIndex - 1
-        );
-
-    }
-
-
-    /* =====================================================
-       AUTO SLIDE
-       ===================================================== */
-
-    function startAutoSlide() {
-
-        clearInterval(autoSlide);
-
-        autoSlide =
-            setInterval(
-                nextSlide,
-                SITE_CONFIG.heroSlideDuration
-            );
-
-    }
-
-
-    /* =====================================================
-       CONTROLS
+       NEXT
        ===================================================== */
 
     const nextButton =
-        document.getElementById("hero-next");
-
-    const previousButton =
-        document.getElementById("hero-prev");
+        document.getElementById(
+            "hero-next"
+        );
 
 
     nextButton?.addEventListener(
         "click",
         () => {
 
-            nextSlide();
+            isPaused = false;
 
-            startAutoSlide();
+            showSlide(
+                currentIndex + 1
+            );
 
         }
     );
+
+
+    /* =====================================================
+       PREVIOUS
+       ================================================= */
+
+    const previousButton =
+        document.getElementById(
+            "hero-prev"
+        );
 
 
     previousButton?.addEventListener(
         "click",
         () => {
 
-            previousSlide();
+            isPaused = false;
 
-            startAutoSlide();
+            showSlide(
+                currentIndex - 1
+            );
 
         }
     );
@@ -471,14 +625,14 @@ function initializeHeroSlider() {
             "click",
             () => {
 
+                isPaused = false;
+
                 const index =
                     Number(
                         dot.dataset.heroDot
                     );
 
                 showSlide(index);
-
-                startAutoSlide();
 
             }
         );
@@ -487,18 +641,70 @@ function initializeHeroSlider() {
 
 
     /* =====================================================
-       PAUSE ON HOVER
+       PAUSE ON MOUSE ENTER
        ===================================================== */
 
     container.addEventListener(
         "mouseenter",
-        () => clearInterval(autoSlide)
+        () => {
+
+            isPaused = true;
+
+            clearSlideTimer();
+
+
+            const video =
+                slides[currentIndex]
+                    .querySelector("video");
+
+
+            if (video) {
+
+                video.pause();
+
+            }
+
+        }
     );
 
 
+    /* =====================================================
+       RESUME ON MOUSE LEAVE
+       ===================================================== */
+
     container.addEventListener(
         "mouseleave",
-        startAutoSlide
+        () => {
+
+            isPaused = false;
+
+
+            const video =
+                slides[currentIndex]
+                    .querySelector("video");
+
+
+            if (video) {
+
+                video.play().catch(() => {});
+
+            } else {
+
+                timer =
+                    setTimeout(
+                        () => {
+
+                            showSlide(
+                                currentIndex + 1
+                            );
+
+                        },
+                        SITE_CONFIG.heroSlideDuration
+                    );
+
+            }
+
+        }
     );
 
 
@@ -506,7 +712,7 @@ function initializeHeroSlider() {
        START
        ===================================================== */
 
-    startAutoSlide();
+    showSlide(0);
 
 }
 
@@ -518,7 +724,9 @@ function initializeHeroSlider() {
 function renderTrustItems() {
 
     const container =
-        document.getElementById("trust-grid");
+        document.getElementById(
+            "trust-grid"
+        );
 
     if (!container) return;
 
@@ -566,17 +774,17 @@ function renderTrustItems() {
 
 /* =========================================================
    PRODUCTS
+   Supports images + videos
    ========================================================= */
 
 function renderProducts() {
 
     const container =
-        document.getElementById("products-grid");
+        document.getElementById(
+            "products-grid"
+        );
 
     if (!container) return;
-
-
-    container.innerHTML = "";
 
 
     const productHTML = [];
@@ -584,49 +792,86 @@ function renderProducts() {
 
     PRODUCTS.forEach(product => {
 
-        const images =
+        const media =
             getProductImages(product);
 
 
-        /*
-           If the product has no images,
-           show the placeholder.
-        */
-
-        const finalImages =
-            images.length > 0
-                ? images
-                : ["assets/images/placeholder.svg"];
+        const finalMedia =
+            media.length > 0
+                ? media
+                : [
+                    "assets/images/placeholder.svg"
+                ];
 
 
-        const multipleImages =
-            finalImages.length > 1;
+        const multipleMedia =
+            finalMedia.length > 1;
 
 
         /* =================================================
-           PRODUCT SLIDES
+           CREATE SLIDES
            ================================================= */
 
         const slides =
-            finalImages
-                .map((image, index) => `
+            finalMedia
+                .map((file, index) => {
 
-                    <div
-                        class="product-carousel-slide ${index === 0 ? "active" : ""}"
-                        data-product-slide="${index}"
-                    >
+                    const video =
+                        isVideoFile(file);
 
-                        <img
-                            src="${image}"
-                            alt="${product.name}"
-                            class="product-image"
-                            loading="lazy"
-                            decoding="async"
+
+                    /* =====================================
+                       VIDEO
+                       ===================================== */
+
+                    if (video) {
+
+                        return `
+
+                            <div
+                                class="product-carousel-slide ${index === 0 ? "active" : ""}"
+                                data-product-slide="${index}"
+                            >
+
+                                <video
+                                    class="product-image product-video"
+                                    src="${file}"
+                                    muted
+                                    playsinline
+                                    preload="metadata"
+                                ></video>
+
+                            </div>
+
+                        `;
+
+                    }
+
+
+                    /* =====================================
+                       IMAGE
+                       ===================================== */
+
+                    return `
+
+                        <div
+                            class="product-carousel-slide ${index === 0 ? "active" : ""}"
+                            data-product-slide="${index}"
                         >
 
-                    </div>
+                            <img
+                                src="${file}"
+                                alt="${product.name}"
+                                class="product-image"
+                                loading="${index === 0 ? "eager" : "lazy"}"
+                                decoding="async"
+                            >
 
-                `)
+                        </div>
+
+                    `;
+
+                })
                 .join("");
 
 
@@ -635,7 +880,7 @@ function renderProducts() {
            ================================================= */
 
         const arrows =
-            multipleImages
+            multipleMedia
                 ? `
 
                     <button
@@ -670,22 +915,29 @@ function renderProducts() {
            ================================================= */
 
         const dots =
-            multipleImages
+            multipleMedia
                 ? `
 
                     <div class="product-dots">
 
-                        ${finalImages
-                            .map((_, index) => `
+                        ${finalMedia
+                            .map((file, index) => {
 
-                                <button
-                                    type="button"
-                                    class="product-dot ${index === 0 ? "active" : ""}"
-                                    data-product-dot="${index}"
-                                    aria-label="Image ${index + 1}"
-                                ></button>
+                                const video =
+                                    isVideoFile(file);
 
-                            `)
+                                return `
+
+                                    <button
+                                        type="button"
+                                        class="product-dot ${index === 0 ? "active" : ""}"
+                                        data-product-dot="${index}"
+                                        aria-label="${video ? "Video" : "Image"} ${index + 1}"
+                                    ></button>
+
+                                `;
+
+                            })
                             .join("")}
 
                     </div>
@@ -705,8 +957,6 @@ function renderProducts() {
                 data-product-card
             >
 
-                <!-- IMAGE FRAME -->
-
                 <div class="product-image-container">
 
                     <div
@@ -719,8 +969,6 @@ function renderProducts() {
                     </div>
 
 
-                    <!-- BADGE -->
-
                     <div class="product-badge">
                         ${product.badge}
                     </div>
@@ -732,8 +980,6 @@ function renderProducts() {
 
                 </div>
 
-
-                <!-- PRODUCT INFORMATION -->
 
                 <div class="product-content">
 
@@ -831,6 +1077,17 @@ function renderProducts() {
 
 /* =========================================================
    PRODUCT CARD CAROUSELS
+   =========================================================
+
+   IMPORTANT:
+
+   IMAGE:
+   stays for productSlideDuration
+
+   VIDEO:
+   plays until the video ENDS
+
+   No 2.5 second timer is used for videos.
    ========================================================= */
 
 function initializeProductCarousels() {
@@ -852,19 +1109,26 @@ function initializeProductCarousels() {
 
 
         const slides =
-            carousel.querySelectorAll(
-                ".product-carousel-slide"
+            Array.from(
+                carousel.querySelectorAll(
+                    ".product-carousel-slide"
+                )
             );
 
+
         const dots =
-            card.querySelectorAll(
-                ".product-dot"
+            Array.from(
+                card.querySelectorAll(
+                    ".product-dot"
+                )
             );
+
 
         const prev =
             card.querySelector(
                 "[data-product-prev]"
             );
+
 
         const next =
             card.querySelector(
@@ -877,7 +1141,86 @@ function initializeProductCarousels() {
 
         let currentIndex = 0;
 
-        let interval;
+        let timer = null;
+
+        let paused = false;
+
+
+        /* =================================================
+           CLEAR TIMER
+           ================================================= */
+
+        function clearTimer() {
+
+            if (timer !== null) {
+
+                clearTimeout(timer);
+
+                timer = null;
+
+            }
+
+        }
+
+
+        /* =================================================
+           GET CURRENT VIDEO
+           ================================================= */
+
+        function getCurrentVideo() {
+
+            const slide =
+                slides[currentIndex];
+
+            if (!slide) return null;
+
+            return slide.querySelector(
+                "video"
+            );
+
+        }
+
+
+        /* =================================================
+           STOP ALL VIDEOS
+           ================================================= */
+
+        function stopAllVideos() {
+
+            slides.forEach((slide, index) => {
+
+                const video =
+                    slide.querySelector(
+                        "video"
+                    );
+
+                if (!video) return;
+
+
+                video.pause();
+
+
+                /*
+                   Reset videos that aren't
+                   currently selected.
+                */
+
+                if (index !== currentIndex) {
+
+                    try {
+
+                        video.currentTime = 0;
+
+                    } catch (error) {}
+
+                }
+
+
+                video.onended = null;
+
+            });
+
+        }
 
 
         /* =================================================
@@ -886,10 +1229,32 @@ function initializeProductCarousels() {
 
         function showSlide(index) {
 
+            /*
+               Remove any old image timer.
+            */
+
+            clearTimer();
+
+
+            /*
+               Calculate new index.
+            */
+
             currentIndex =
                 (index + slides.length) %
                 slides.length;
 
+
+            /*
+               Stop videos.
+            */
+
+            stopAllVideos();
+
+
+            /* =================================================
+               ACTIVATE SLIDE
+               ================================================= */
 
             slides.forEach((slide, i) => {
 
@@ -901,6 +1266,10 @@ function initializeProductCarousels() {
             });
 
 
+            /* =================================================
+               ACTIVATE DOT
+               ================================================= */
+
             dots.forEach((dot, i) => {
 
                 dot.classList.toggle(
@@ -910,71 +1279,174 @@ function initializeProductCarousels() {
 
             });
 
+
+            /* =================================================
+               CURRENT VIDEO?
+               ================================================= */
+
+            const video =
+                getCurrentVideo();
+
+
+            /* =================================================
+               VIDEO SLIDE
+               ================================================= */
+
+            if (video) {
+
+                /*
+                   VERY IMPORTANT:
+
+                   There is NO setTimeout()
+                   here.
+
+                   Video controls when
+                   the slide changes.
+                */
+
+
+                video.muted = true;
+
+                video.playsInline = true;
+
+
+                /*
+                   Start from beginning.
+                */
+
+                try {
+
+                    video.currentTime = 0;
+
+                } catch (error) {}
+
+
+                /*
+                   When video finishes,
+                   go to next slide.
+                */
+
+                video.onended = () => {
+
+                    if (!paused) {
+
+                        showSlide(
+                            currentIndex + 1
+                        );
+
+                    }
+
+                };
+
+
+                /*
+                   Play video.
+                */
+
+                const playVideo = () => {
+
+                    if (paused) return;
+
+                    video
+                        .play()
+                        .catch(() => {});
+
+                };
+
+
+                /*
+                   Video already ready.
+                */
+
+                if (video.readyState >= 3) {
+
+                    playVideo();
+
+                } else {
+
+                    /*
+                       Wait until browser can play.
+                    */
+
+                    video.addEventListener(
+                        "canplay",
+                        playVideo,
+                        {
+                            once: true
+                        }
+                    );
+
+                }
+
+
+                /*
+                   IMPORTANT:
+
+                   RETURN HERE.
+
+                   This prevents the image
+                   timer from being created.
+                */
+
+                return;
+
+            }
+
+
+            /* =================================================
+               NORMAL IMAGE
+               ================================================= */
+
+            if (!paused) {
+
+                timer =
+                    setTimeout(
+                        () => {
+
+                            showSlide(
+                                currentIndex + 1
+                            );
+
+                        },
+                        SITE_CONFIG.productSlideDuration
+                    );
+
+            }
+
         }
 
 
         /* =================================================
-           NEXT / PREVIOUS
-           ================================================= */
-
-        function nextSlide() {
-
-            showSlide(
-                currentIndex + 1
-            );
-
-        }
-
-
-        function previousSlide() {
-
-            showSlide(
-                currentIndex - 1
-            );
-
-        }
-
-
-        /* =================================================
-           AUTO PLAY
-           ================================================= */
-
-        function start() {
-
-            clearInterval(interval);
-
-            interval =
-                setInterval(
-                    nextSlide,
-                    SITE_CONFIG.productSlideDuration
-                );
-
-        }
-
-
-        /* =================================================
-           BUTTONS
+           NEXT BUTTON
            ================================================= */
 
         next?.addEventListener(
             "click",
             () => {
 
-                nextSlide();
+                paused = false;
 
-                start();
+                showSlide(
+                    currentIndex + 1
+                );
 
             }
         );
 
 
+        /* =================================================
+           PREVIOUS BUTTON
+           ================================================= */
+
         prev?.addEventListener(
             "click",
             () => {
 
-                previousSlide();
+                paused = false;
 
-                start();
+                showSlide(
+                    currentIndex - 1
+                );
 
             }
         );
@@ -990,13 +1462,16 @@ function initializeProductCarousels() {
                 "click",
                 () => {
 
-                    showSlide(
+                    paused = false;
+
+
+                    const index =
                         Number(
                             dot.dataset.productDot
-                        )
-                    );
+                        );
 
-                    start();
+
+                    showSlide(index);
 
                 }
             );
@@ -1005,26 +1480,102 @@ function initializeProductCarousels() {
 
 
         /* =================================================
-           START
-           ================================================= */
-
-        start();
-
-
-        /* =================================================
-           PAUSE ON HOVER
+           MOUSE ENTER
            ================================================= */
 
         card.addEventListener(
             "mouseenter",
-            () => clearInterval(interval)
+            () => {
+
+                paused = true;
+
+                clearTimer();
+
+
+                const video =
+                    getCurrentVideo();
+
+
+                if (video) {
+
+                    video.pause();
+
+                }
+
+            }
         );
 
+
+        /* =================================================
+           MOUSE LEAVE
+           ================================================= */
 
         card.addEventListener(
             "mouseleave",
-            start
+            () => {
+
+                paused = false;
+
+
+                const video =
+                    getCurrentVideo();
+
+
+                /* =============================================
+                   VIDEO
+                   ============================================= */
+
+                if (video) {
+
+                    video.play().catch(() => {});
+
+
+                    video.onended = () => {
+
+                        if (!paused) {
+
+                            showSlide(
+                                currentIndex + 1
+                            );
+
+                        }
+
+                    };
+
+
+                    return;
+
+                }
+
+
+                /* =============================================
+                   IMAGE
+                   ============================================= */
+
+                clearTimer();
+
+
+                timer =
+                    setTimeout(
+                        () => {
+
+                            showSlide(
+                                currentIndex + 1
+                            );
+
+                        },
+                        SITE_CONFIG.productSlideDuration
+                    );
+
+            }
         );
+
+
+        /* =================================================
+           START
+           ================================================= */
+
+        showSlide(0);
 
     });
 
@@ -1038,7 +1589,9 @@ function initializeProductCarousels() {
 function renderBenefits() {
 
     const container =
-        document.getElementById("benefits-grid");
+        document.getElementById(
+            "benefits-grid"
+        );
 
     if (!container) return;
 
@@ -1083,7 +1636,9 @@ function renderBenefits() {
 function renderBuyingSteps() {
 
     const container =
-        document.getElementById("steps-grid");
+        document.getElementById(
+            "steps-grid"
+        );
 
     if (!container) return;
 
@@ -1127,7 +1682,9 @@ function renderBuyingSteps() {
 function renderFaqs() {
 
     const container =
-        document.getElementById("faq-list");
+        document.getElementById(
+            "faq-list"
+        );
 
     if (!container) return;
 
@@ -1188,8 +1745,12 @@ function renderFaqs() {
                             )
                         );
 
+
                     const icon =
-                        button.querySelector("i");
+                        button.querySelector(
+                            "i"
+                        );
+
 
                     const isOpen =
                         button.getAttribute(
@@ -1229,7 +1790,9 @@ function renderFaqs() {
 function initializeScrollEffects() {
 
     const header =
-        document.getElementById("main-header");
+        document.getElementById(
+            "main-header"
+        );
 
     if (!header) return;
 
@@ -1263,20 +1826,6 @@ function initializeScrollEffects() {
    CUSTOM LUXURY CURSOR
    ========================================================= */
 
-/*
-   IMPORTANT:
-
-   Your old main.js contained TWO cursor systems.
-
-   It also tried to access #custom-cursor even when
-   that element did not exist.
-
-   That could create JavaScript errors.
-
-   This version safely initializes the cursor only
-   when the required HTML exists.
-*/
-
 function initializeCustomCursor() {
 
     /*
@@ -1292,19 +1841,19 @@ function initializeCustomCursor() {
 
 
     const cursor =
-        document.getElementById("custom-cursor");
+        document.getElementById(
+            "custom-cursor"
+        );
 
-    if (!cursor) {
-        return;
-    }
+    if (!cursor) return;
 
 
     const dot =
-        cursor.querySelector(".cursor-dot");
+        cursor.querySelector(
+            ".cursor-dot"
+        );
 
-    if (!dot) {
-        return;
-    }
+    if (!dot) return;
 
 
     let mouseX = 0;
@@ -1322,7 +1871,7 @@ function initializeCustomCursor() {
 
     document.addEventListener(
         "mousemove",
-        (event) => {
+        event => {
 
             mouseX =
                 event.clientX;
@@ -1349,6 +1898,7 @@ function initializeCustomCursor() {
 
         dot.style.left =
             cursorX + "px";
+
 
         dot.style.top =
             cursorY + "px";
@@ -1380,7 +1930,9 @@ function initializeCustomCursor() {
             "mouseenter",
             () => {
 
-                dot.classList.add("hover");
+                dot.classList.add(
+                    "hover"
+                );
 
             }
         );
@@ -1390,7 +1942,9 @@ function initializeCustomCursor() {
             "mouseleave",
             () => {
 
-                dot.classList.remove("hover");
+                dot.classList.remove(
+                    "hover"
+                );
 
             }
         );
@@ -1406,7 +1960,9 @@ function initializeCustomCursor() {
         "mousedown",
         () => {
 
-            dot.classList.add("click");
+            dot.classList.add(
+                "click"
+            );
 
         }
     );
@@ -1416,7 +1972,9 @@ function initializeCustomCursor() {
         "mouseup",
         () => {
 
-            dot.classList.remove("click");
+            dot.classList.remove(
+                "click"
+            );
 
         }
     );

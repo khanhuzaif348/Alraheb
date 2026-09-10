@@ -173,7 +173,12 @@ body {
         box-shadow 0.3s ease,
         background 0.3s ease;
 }
-
+.hero-product-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
 .whatsapp-button {
     padding: 11px 20px;
     font-size: 14px;
@@ -188,6 +193,12 @@ body {
 
     box-shadow:
         0 15px 35px rgba(37, 211, 102, 0.18);
+}
+.hero-product-video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .cta-whatsapp {
